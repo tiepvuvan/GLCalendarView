@@ -38,6 +38,11 @@
     return cal;
 }
 
++ (void)setCalendar:(NSCalendar *)calendar {
+    NSMutableDictionary *threadDictionary = [[NSThread currentThread] threadDictionary];
+    [threadDictionary setObject:calendar forKey:@"GLCalendar"];
+}
+    
 + (NSDate *)weekFirstDate:(NSDate *)date
 {
     NSCalendar *calendar = [GLDateUtils calendar];

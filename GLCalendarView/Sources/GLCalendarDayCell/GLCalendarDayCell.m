@@ -45,7 +45,8 @@
     self.oddMonthBackgroundColor = appearance.oddMonthBackgroundColor ?: [UIColor whiteColor];
     self.dayLabelAttributes = appearance.dayLabelAttributes ?: @{NSFontAttributeName:[UIFont systemFontOfSize:20]};
     self.futureDayLabelAttributes = appearance.futureDayLabelAttributes ?: self.dayLabelAttributes;
-    self.monthLabelAttributes = appearance.monthLabelAttributes ?: @{NSFontAttributeName:[UIFont systemFontOfSize:8]};
+    
+    self.monthLabelAttributes = appearance.monthLabelAttributes ?: @{NSFontAttributeName:[UIFont fontWithName:@"Avenir-Heavy" size:8]};
     self.todayLabelAttributes = appearance.todayLabelAttributes ?: @{NSFontAttributeName:[UIFont boldSystemFontOfSize:22]};
     
     self.backgroundCover.paddingTop = appearance.editCoverPadding ?: 2;
@@ -112,9 +113,8 @@
         
     // day label and month label
     if ([self isToday]) {
-        self.monthLabel.textColor = [UIColor whiteColor];
         NSDateFormatter *todayFormatter = [[NSDateFormatter alloc] init];
-        todayFormatter.dateStyle = NSDateFormatterMediumStyle;
+        todayFormatter.dateStyle = NSDateFormatterShortStyle;
         todayFormatter.timeStyle = NSDateFormatterNoStyle;
         todayFormatter.doesRelativeDateFormatting = YES;
         [self setMonthLabelText:[todayFormatter stringFromDate:[NSDate date]]];
@@ -123,13 +123,11 @@
         self.backgroundCover.isToday = YES;
         self.backgroundCover.fillColor = self.todayBackgroundColor;
     } else if (day == 1) {
-        self.monthLabel.textColor = [UIColor redColor];
         [self setMonthLabelText:[self monthText:month]];
         self.dayLabel.textColor = [UIColor redColor];
         [self setDayLabelText:[NSString stringWithFormat:@"%ld", (long)day]];
         self.backgroundCover.isToday = NO;
     } else {
-        self.monthLabel.textColor = [UIColor blackColor];
         [self setMonthLabelText:@""];
         self.dayLabel.textColor = [UIColor blackColor];
         [self setDayLabelText:[NSString stringWithFormat:@"%ld", (long)day]];
@@ -146,7 +144,6 @@
         self.backgroundCover.fillColor = self.range.backgroundColor ?: [UIColor clearColor];
         self.backgroundCover.backgroundImage = self.range.backgroundImage ?: nil;
         UIColor *textColor = self.range.textColor ?: [UIColor whiteColor];
-        self.monthLabel.textColor = textColor;
         self.dayLabel.textColor = textColor;
         
         // check position in range

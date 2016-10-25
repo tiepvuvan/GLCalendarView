@@ -20,6 +20,7 @@
 - (void)calenderView:(GLCalendarView *)calendarView didUpdateRange:(GLCalendarDateRange *)range toBeginDate:(NSDate *)beginDate endDate:(NSDate *)endDate;
 @optional
 - (NSArray *)weekDayTitlesForCalendarView:(GLCalendarView *)calendarView;
+- (void)calendarView: (GLCalendarView *)calendarView didSelectCellAtDate: (NSDate *)date;
 @end
 
 
@@ -36,7 +37,7 @@
 @property (nonatomic, copy) NSDate *firstDate;
 @property (nonatomic, copy) NSDate *lastDate;
 @property (nonatomic, strong) NSMutableArray *ranges;
-@property (nonatomic) BOOL showMagnifier;
+@property (nonatomic) BOOL showMaginfier;
 @property (nonatomic, weak) id<GLCalendarViewDelegate> delegate;
 - (void)reload;
 - (void)addRange:(GLCalendarDateRange *)range;

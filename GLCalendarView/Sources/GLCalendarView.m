@@ -8,7 +8,6 @@
 
 #import "GLCalendarView.h"
 #import "GLCalendarDayCell.h"
-#import "GLCalendarMonthCoverView.h"
 #import "GLDateUtils.h"
 
 static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
@@ -27,10 +26,7 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
 @property (nonatomic) BOOL draggingEndDate;
 
 @property (weak, nonatomic) IBOutlet UICollectionView *collectionView;
-@property (weak, nonatomic) IBOutlet UIView *weekDayTitle;
-@property (weak, nonatomic) IBOutlet GLCalendarMonthCoverView *monthCoverView;
-@property (weak, nonatomic) IBOutlet UIView *magnifierContainer;
-@property (weak, nonatomic) IBOutlet UIImageView *maginifierContentView;
+@property (weak, nonatomic) IBOutlet UIStackView *weekDayTitle;
 @end
 
 @implementation GLCalendarView
@@ -73,8 +69,6 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
     
     self.calendar = [GLDateUtils calendar];
     
-    self.monthCoverView.hidden = YES;
-
     self.collectionView.dataSource = self;
     self.collectionView.delegate = self;
     [self.collectionView registerNib:[UINib nibWithNibName:@"GLCalendarDayCell" bundle:[NSBundle bundleForClass:self.class]] forCellWithReuseIdentifier:CELL_REUSE_IDENTIFIER];
@@ -91,15 +85,7 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
     [self.collectionView addGestureRecognizer:self.dragBeginDateGesture];
     [self.collectionView addGestureRecognizer:self.dragEndDateGesture];
     
-    [self addSubview:self.magnifierContainer];
-    self.magnifierContainer.hidden = YES;
-    
     [self reloadAppearance];
-}
-
-- (void)layoutSubviews
-{
-    [super layoutSubviews];
     [self setupWeekDayTitle];
 }
 
@@ -108,24 +94,27 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
     [self.weekDayTitle.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
     CGFloat width = (CGRectGetWidth(self.bounds) - self.padding * 2) / 7;
     CGFloat centerY = self.weekDayTitle.bounds.size.height / 2;
+    
     NSArray *titles;
     if ([self.delegate respondsToSelector:@selector(weekDayTitlesForCalendarView:)]) {
         titles = [self.delegate weekDayTitlesForCalendarView:self];
     } else {
-        titles = self.calendar.veryShortStandaloneWeekdaySymbols;
+        titles = self.calendar.shortStandaloneWeekdaySymbols;
     }
+    
     NSInteger firstWeekDayIdx = [self.calendar firstWeekday] - 1;  // Sunday == 1
     if (firstWeekDayIdx > 0) {
         NSArray *post = [titles subarrayWithRange:NSMakeRange(firstWeekDayIdx, 7 - firstWeekDayIdx)];
         NSArray *pre = [titles subarrayWithRange:NSMakeRange(0, firstWeekDayIdx)];
         titles = [post arrayByAddingObjectsFromArray:pre];
     }
+    
     for (int i = 0; i < titles.count; i++) {
         UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, width, 20)];
         label.textAlignment = NSTextAlignmentCenter;
-        label.attributedText = [[NSAttributedString alloc] initWithString:titles[i] attributes:self.weekDayTitleAttributes];
-        label.center = CGPointMake(self.padding + i * width + width / 2, centerY);
-        [self.weekDayTitle addSubview:label];
+        label.attributedText = [[NSAttributedString alloc] initWithString:[titles[i] uppercaseString] attributes:self.weekDayTitleAttributes];
+        label.backgroundColor = [UIColor whiteColor];
+        [self.weekDayTitle addArrangedSubview:label];
     }
 }
 
@@ -138,14 +127,12 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
     self.rowHeight = appearance.rowHeight ?: DEFAULT_ROW_HEIGHT;
     self.weekDayTitleAttributes = appearance.weekDayTitleAttributes ?: @{NSFontAttributeName:[UIFont systemFontOfSize:8], NSForegroundColorAttributeName:[UIColor grayColor]};
     self.monthCoverAttributes = appearance.monthCoverAttributes ?: @{NSFontAttributeName:[UIFont systemFontOfSize:30]};
-    self.monthCoverView.textAttributes = self.monthCoverAttributes;
 }
 
 #pragma mark - public api
 
 - (void)reload
 {
-    [self.monthCoverView updateWithFirstDate:self.firstDate lastDate:self.lastDate calendar:self.calendar rowHeight:self.rowHeight];
     [self.collectionView reloadData];
 }
 
@@ -272,28 +259,8 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
 {
     NSDate *date = [self dateForCellAtIndexPath:indexPath];
-    GLCalendarDateRange *range = [self selectedRangeForDate:date];
-    
-    // if click in a range
-    if (range && range.editable) {
-        if (range == self.rangeUnderEdit) {
-            return;
-        }
-        // click a different range
-        if (self.rangeUnderEdit && range != self.rangeUnderEdit) {
-            [self finishEditRange:self.rangeUnderEdit continueEditing:YES];
-        }
-        [self beginToEditRange:range];
-    } else {
-        if (self.rangeUnderEdit) {
-            [self finishEditRange:self.rangeUnderEdit continueEditing:NO];
-        } else {
-            BOOL canAdd = [self.delegate calenderView:self canAddRangeWithBeginDate:date];
-            if (canAdd) {
-                GLCalendarDateRange *rangeToAdd = [self.delegate calenderView:self rangeToAddWithBeginDate:date];
-                [self addRange:rangeToAdd];
-            }
-        }
+    if ([[self delegate] respondsToSelector:@selector(calendarView:didSelectCellAtDate:)]) {
+        [[self delegate] calendarView:self didSelectCellAtDate:date];
     }
 }
 
@@ -324,209 +291,6 @@ static NSString * const CELL_REUSE_IDENTIFIER = @"DayCell";
     return (CGRectGetWidth(self.bounds) - self.padding * 2) / 7;
 }
 
-# pragma mark - UIScrollView delegate
-- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView
-{
-    self.monthCoverView.contentSize = self.collectionView.contentSize;
-    self.monthCoverView.hidden = NO;
-    [UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionAllowUserInteraction animations:^{
-        self.monthCoverView.alpha = 1;
-        self.collectionView.alpha = 0.3;
-    } completion:^(BOOL finished) {
-        
-    }];
-}
-
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView
-{
-    // update month cover
-    self.monthCoverView.contentOffset = self.collectionView.contentOffset;
-}
-
-- (void)scrollViewWillEndDragging:(UIScrollView *)scrollView
-                     withVelocity:(CGPoint)velocity
-              targetContentOffset:(inout CGPoint *)targetContentOffset
-{
-    [UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionAllowUserInteraction animations:^{
-        self.monthCoverView.alpha = 0;
-        self.collectionView.alpha = 1;
-    } completion:^(BOOL finished) {
-        self.monthCoverView.hidden = YES;
-    }];
-}
-
-# pragma mark - Edit range
-
-- (void)beginToEditRange:(GLCalendarDateRange *)range
-{
-    self.rangeUnderEdit = range;
-    self.rangeUnderEdit.inEdit = YES;
-    [self reloadFromBeginDate:self.rangeUnderEdit.beginDate toDate:self.rangeUnderEdit.endDate];
-    [self.delegate calenderView:self beginToEditRange:range];
-}
-
-- (void)finishEditRange:(GLCalendarDateRange *)range continueEditing:(BOOL)continueEditing
-{
-    self.rangeUnderEdit.inEdit = NO;
-    [self reloadFromBeginDate:self.rangeUnderEdit.beginDate toDate:self.rangeUnderEdit.endDate];
-    [self.delegate calenderView:self finishEditRange:self.rangeUnderEdit continueEditing:continueEditing];
-    self.rangeUnderEdit = nil;
-}
-
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer
-{
-    if (!self.rangeUnderEdit) {
-        return NO;
-    }
-    if (recognizer == self.dragBeginDateGesture) {
-        CGPoint location = [recognizer locationInView:self.collectionView];
-        CGRect rectForBeginDate = [self rectForDate:self.rangeUnderEdit.beginDate];
-        rectForBeginDate.origin.x -= self.cellWidth / 2;
-        if (CGRectContainsPoint(rectForBeginDate, location)) {
-            return YES;
-        }
-    }
-    if (recognizer == self.dragEndDateGesture) {
-        CGPoint location = [recognizer locationInView:self.collectionView];
-        CGRect rectForEndDate = [self rectForDate:self.rangeUnderEdit.endDate];
-        rectForEndDate.origin.x += self.cellWidth / 2;
-        if (CGRectContainsPoint(rectForEndDate, location)) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-
-- (void)handleDragBeginDate:(UIPanGestureRecognizer *)recognizer
-{
-    if (recognizer.state == UIGestureRecognizerStateBegan) {
-        self.draggingBeginDate = YES;
-        [self reloadCellOnDate:self.rangeUnderEdit.beginDate];
-        [self showMagnifierAboveDate:self.rangeUnderEdit.beginDate];
-        return;
-    }
-    if (recognizer.state == UIGestureRecognizerStateEnded) {
-        self.draggingBeginDate = NO;
-        [self hideMagnifier];
-        [self reloadCellOnDate:self.rangeUnderEdit.beginDate];
-        return;
-    }
-    
-    CGPoint location = [recognizer locationInView:self.collectionView];
-    if (location.y <= self.collectionView.contentOffset.y) {
-        return;
-    }
-    
-    NSDate *date = [self dateAtLocation:location];
-    
-    if ([GLDateUtils date:self.rangeUnderEdit.beginDate isSameDayAsDate:date]) {
-        return;
-    }
-    
-    if ([self.rangeUnderEdit.endDate compare:date] == NSOrderedAscending) {
-        return;
-    }
-    
-    BOOL canUpdate = [self.delegate calenderView:self canUpdateRange:self.rangeUnderEdit toBeginDate:date endDate:self.rangeUnderEdit.endDate];
-    
-    if (canUpdate) {
-        NSDate *originalBeginDate = [self.rangeUnderEdit.beginDate copy];
-        self.rangeUnderEdit.beginDate = date;
-        if ([originalBeginDate compare:date] == NSOrderedAscending) {
-            [self reloadFromBeginDate:originalBeginDate toDate:date];
-        } else {
-            [self reloadFromBeginDate:date toDate:originalBeginDate];
-        }
-        [self showMagnifierAboveDate:self.rangeUnderEdit.beginDate];
-        [self.delegate calenderView:self didUpdateRange:self.rangeUnderEdit toBeginDate:date endDate:self.rangeUnderEdit.endDate];
-    }
-}
-
-- (void)handleDragEndDate:(UIPanGestureRecognizer *)recognizer
-{
-    if (recognizer.state == UIGestureRecognizerStateBegan) {
-        self.draggingEndDate = YES;
-        [self reloadCellOnDate:self.rangeUnderEdit.endDate];
-        [self showMagnifierAboveDate:self.rangeUnderEdit.endDate];
-        return;
-    }
-    if (recognizer.state == UIGestureRecognizerStateEnded) {
-        self.draggingEndDate = NO;
-        [self hideMagnifier];
-        [self reloadCellOnDate:self.rangeUnderEdit.endDate];
-        return;
-    }
-
-    CGPoint location = [recognizer locationInView:self.collectionView];
-    if (location.y <= self.collectionView.contentOffset.y) {
-        return;
-    }
-    
-    NSDate *date = [self dateAtLocation:location];
-
-    if ([GLDateUtils date:self.rangeUnderEdit.endDate isSameDayAsDate:date]) {
-        return;
-    }
-    if ([date compare:self.rangeUnderEdit.beginDate] == NSOrderedAscending) {
-        return;
-    }
-    
-    BOOL canUpdate = [self.delegate calenderView:self canUpdateRange:self.rangeUnderEdit toBeginDate:self.rangeUnderEdit.beginDate endDate:date];
-    
-    if (canUpdate) {
-        NSDate *originalEndDate = [self.rangeUnderEdit.endDate copy];
-        self.rangeUnderEdit.endDate = date;
-        if ([originalEndDate compare:date] == NSOrderedAscending) {
-            [self reloadFromBeginDate:originalEndDate toDate:date];
-        } else {
-            [self reloadFromBeginDate:date toDate:originalEndDate];
-        }
-        [self showMagnifierAboveDate:self.rangeUnderEdit.endDate];
-        [self.delegate calenderView:self didUpdateRange:self.rangeUnderEdit toBeginDate:self.rangeUnderEdit.beginDate endDate:date];
-    }
-}
-
-# pragma mark - maginifier
-
-- (void)showMagnifierAboveDate:(NSDate *)date
-{
-    if (!self.showMagnifier) {
-        return;
-    }
-    GLCalendarDayCell *cell = (GLCalendarDayCell *)[self collectionView:self.collectionView cellForItemAtIndexPath:[self indexPathForDate:date]];
-    CGFloat delta = self.cellWidth / 2;
-    if (self.draggingBeginDate) {
-        delta = delta;
-    } else {
-        delta = -delta;
-    }
-    UIGraphicsBeginImageContextWithOptions(self.maginifierContentView.frame.size, YES, 0.0);
-    CGContextRef context = UIGraphicsGetCurrentContext();
-    CGContextFillRect(context, self.maginifierContentView.bounds);
-    CGContextTranslateCTM(context, -cell.center.x + delta, -cell.center.y);
-    CGContextTranslateCTM(context, self.maginifierContentView.frame.size.width / 2, self.maginifierContentView.frame.size.height / 2);
-    [self.collectionView.layer renderInContext:context];
-    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    
-    self.maginifierContentView.image = image;
-    self.magnifierContainer.center = [self convertPoint:CGPointMake(cell.center.x - delta - 58, cell.center.y - 90) fromView:self.collectionView];
-    self.magnifierContainer.hidden = NO;
-}
-
-- (void)hideMagnifier
-{
-    if (!self.showMagnifier) {
-        return;
-    }
-    self.magnifierContainer.hidden = YES;
-}
-
-- (IBAction)backToTodayButtonPressed:(id)sender
-{
-    [self scrollToDate:[NSDate date] animated:YES];
-}
 # pragma mark - helper
 
 static NSDate *today;
